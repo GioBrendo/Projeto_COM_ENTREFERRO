@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1113">
+<title>Freio por Correntes de Foucault · Bobinas CA Gêmeas — Modelo 3D Interativo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f1113; --panel:rgba(16,18,21,.88); --line:#262b31; --line2:#1d2126;
+  --txt:#e8e6df; --dim:#8e939a; --faint:#6a7076;
+  --amber:#e8a15c; --amber2:#ffb454; --cyan:#63c7d6; --red:#ff5c45;
+  --mono:'IBM Plex Mono',monospace; --sans:'Space Grotesk',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--sans)}
+#app{position:fixed;inset:0;cursor:grab;touch-action:none}
+#app.dragging{cursor:grabbing}
+
+/* ---------- title block ---------- */
+#title{position:fixed;top:calc(22px + env(safe-area-inset-top,0px));left:24px;z-index:5;pointer-events:none;user-select:none}
+#title .rule{width:26px;height:2px;background:var(--amber);margin-bottom:12px}
+#title h1{font:700 27px/0.98 var(--sans);letter-spacing:-.01em;color:var(--txt)}
+#title .tag{font:600 10px var(--mono);letter-spacing:.24em;color:var(--amber);margin:9px 0 14px}
+#title .specs{list-style:none;font:400 9.5px/1.9 var(--mono);color:#b9bec4}
+#title .specs span{display:inline-block;width:52px;color:var(--faint);letter-spacing:.08em}
+#title .specs em{font-style:normal}
+
+/* ---------- hint / legend ---------- */
+#hint{position:fixed;left:24px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:5;font:400 9.5px/1.9 var(--mono);color:var(--faint);user-select:none;pointer-events:none}
+#hint b{color:#a9aeb4;font-weight:500}
+.pol{display:inline-block;width:8px;height:8px;border-radius:2px;vertical-align:-1px;margin:0 5px 0 0}
+.pa{background:var(--amber2)} .pc{background:var(--cyan)} .pe{background:#c79bff}
+
+/* ---------- annotations ---------- */
+#leaders{position:fixed;inset:0;z-index:4;pointer-events:none}
+#anns{position:fixed;inset:0;z-index:4;pointer-events:none;user-select:none}
+.ann{position:fixed;left:0;top:0;max-width:210px}
+.ann .n{font:600 10px var(--mono);letter-spacing:.08em;color:#e3e1da;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.ann .s{font:400 9px var(--mono);color:#9aa0a6;text-shadow:0 1px 3px rgba(0,0,0,.8);margin-top:2px}
+
+/* ---------- tooltip ---------- */
+#tip{position:fixed;z-index:9;display:none;background:rgba(18,20,23,.94);border:1px solid #2e3339;
+  border-radius:6px;padding:7px 10px;pointer-events:none;max-width:230px}
+#tip .t-n{font:600 10px var(--mono);letter-spacing:.08em;color:var(--amber2)}
+#tip .t-s{font:400 9px var(--mono);color:var(--dim);margin-top:3px}
+
+/* ---------- panel ---------- */
+#panel{position:fixed;top:calc(18px + env(safe-area-inset-top,0px));right:18px;z-index:8;width:298px;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(10px);
+  box-shadow:0 14px 44px rgba(0,0,0,.5);user-select:none}
+.p-head{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line2)}
+.p-head .dot{width:8px;height:8px;border-radius:50%;background:#5b6066;flex:none;transition:background .2s}
+.p-head .dot.on{background:var(--amber2);box-shadow:0 0 8px var(--amber2)}
+.p-head .dot.run{background:#b9bec4}
+.p-head .dot.err{background:var(--red);box-shadow:0 0 8px var(--red);animation:bl 1s steps(2) infinite}
+@keyframes bl{50%{opacity:.25}}
+.p-head .st{font:600 10.5px var(--mono);letter-spacing:.14em;color:#cfd3d8;flex:1}
+#btnCol{background:none;border:1px solid var(--line);color:var(--dim);width:22px;height:22px;border-radius:5px;
+  cursor:pointer;font:500 13px/1 var(--mono)}
+#btnCol:hover{color:var(--txt);border-color:#3a4046}
+#pBody{max-height:calc(100vh - 118px);overflow-y:auto}
+#pBody.hidden{display:none}
+#pBody::-webkit-scrollbar{width:4px}
+#pBody::-webkit-scrollbar-thumb{background:#2c3138;border-radius:2px}
+.sec{padding:13px 15px 15px;border-bottom:1px solid var(--line2)}
+.sec:last-child{border-bottom:none}
+.sec h3{font:600 9px var(--sans);letter-spacing:.2em;color:#7d8388;margin-bottom:11px}
+.crow{display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 7px}
+.crow label{font:400 9.5px var(--mono);letter-spacing:.06em;color:#a9aeb4}
+.crow output{font:500 11px var(--mono);color:var(--amber2)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;
+  background:#2a2f35;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:3px;
+  background:#17191c;border:1.5px solid var(--amber);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:3px;background:#17191c;border:1.5px solid var(--amber);cursor:pointer}
+input[type=range]::-moz-range-track{background:transparent}
+input[type=range]::-moz-range-progress{background:var(--amber);height:3px;border-radius:2px}
+#btnBrake{width:100%;margin-top:14px;padding:10px 0;background:rgba(232,161,92,.06);border:1px solid rgba(232,161,92,.4);
+  color:var(--amber2);font:600 10.5px var(--sans);letter-spacing:.16em;border-radius:6px;cursor:pointer;
+  touch-action:none;transition:background .12s,color .12s}
+#btnBrake:hover{background:rgba(232,161,92,.14)}
+#btnBrake.on{background:var(--amber);color:#17130c;border-color:var(--amber)}
+.irow{display:flex;justify-content:space-between;align-items:baseline;padding:3.5px 0}
+.irow span{font:400 9.5px var(--mono);letter-spacing:.05em;color:#a9aeb4}
+.irow b{font:500 14px var(--mono);font-weight:500;color:#efede6}
+.irow b em{font-style:normal;font-size:9px;color:var(--dim);margin-left:4px}
+.irow b em.hot, .irow b.hot{color:var(--red)}
+#tbar{display:flex;gap:3px;margin-top:9px}
+#tbar .seg{flex:1;height:5px;border-radius:2px;background:#24272b}
+#tbar .seg.lit{background:var(--amber)}
+#tbar .seg.lit.r{background:var(--red)}
+#scope{width:100%;height:96px;display:block;background:rgba(0,0,0,.28);border:1px solid var(--line2);border-radius:6px}
+.leg{display:flex;gap:16px;margin-top:7px;font:400 9px var(--mono);color:var(--dim)}
+.leg i{display:inline-block;width:12px;height:2px;vertical-align:3px;margin-right:5px}
+.leg .sa{background:var(--amber2)} .leg .sb{background:#9aa2ab}
+.tg{display:flex;justify-content:space-between;align-items:center;padding:5px 0;cursor:pointer}
+.tg span{font:400 9.5px var(--mono);letter-spacing:.05em;color:#a9aeb4}
+.tg{position:relative}
+.tg input{position:absolute;opacity:0;width:1px;height:1px}
+.tg input:focus-visible + i,#btnBrake:focus-visible,#btnCol:focus-visible,#btnShadow:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--amber2);outline-offset:2px}
+#btnShadow{width:100%;margin:8px 0 2px;padding:7px 0;background:none;border:1px solid var(--line);color:#a9aeb4;font:500 9.5px var(--mono);letter-spacing:.08em;border-radius:5px;cursor:pointer}
+#btnShadow:hover{color:var(--txt);border-color:#3a4046}
+.tg i{width:28px;height:15px;border-radius:8px;background:#2a2f35;position:relative;transition:background .15s;flex:none}
+.tg i::after{content:'';position:absolute;left:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#787f86;transition:all .15s}
+.tg input:checked + i{background:rgba(232,161,92,.35)}
+.tg input:checked + i::after{left:15px;background:var(--amber)}
+
+.lg{margin:2px 0 8px}.lg i{display:block;height:6px;border-radius:3px;margin-bottom:3px;background:linear-gradient(90deg,#00007f,#0000ff,#00ffff,#ffff00,#ff0000,#7f0000)}
+.lg div{display:flex;justify-content:space-between;font:400 9px var(--mono);color:var(--dim)}
+#err{position:fixed;inset:0;display:none;place-items:center;z-index:20;background:var(--bg);
+  font:400 12px var(--mono);color:var(--dim);text-align:center;padding:30px}
+@media (max-width:760px){
+  #title h1{font-size:20px}
+  #title .specs,#hint{display:none}
+  /* painel vira bottom-sheet recolhível */
+  #panel{top:auto;left:0;right:0;bottom:0;width:auto;border-radius:14px 14px 0 0;border-bottom:none;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .p-head{position:relative;padding-top:17px;cursor:pointer}
+  .p-head::before{content:'';position:absolute;top:7px;left:50%;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:#3a4046}
+  #pBody{max-height:min(46vh,400px)}
+}
+.mrow{display:flex;gap:6px;margin-top:8px}.mini{flex:1;padding:7px 4px;font:600 9px var(--mono);letter-spacing:.06em;color:var(--amber2);background:rgba(232,161,92,.06);border:1px solid rgba(232,161,92,.35);border-radius:6px;cursor:pointer}
+.mini:hover{background:rgba(232,161,92,.16)}.mini:focus-visible,select:focus-visible{outline:2px solid var(--amber2);outline-offset:2px}
+select{font:400 10px var(--mono);color:var(--txt);background:#181b1f;border:1px solid var(--line);border-radius:5px;padding:4px 6px}
+.mi{font:400 9px/1.6 var(--mono);color:var(--dim);margin-top:6px}#guide[hidden]{display:none}#guide{margin-top:8px;padding:8px 10px;border-left:2px solid var(--amber);background:rgba(232,161,92,.06)}#guide p{font:400 10px/1.6 var(--mono);color:#cfd3d8}
+input:disabled{opacity:.35}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<svg id="leaders"></svg>
+<div id="anns"></div>
+<div id="tip"><div class="t-n"></div><div class="t-s"></div></div>
+
+<div id="title">
+  <div class="rule"></div>
+  <h1>FREIO POR CORRENTES<br>DE FOUCAULT</h1>
+  <div class="tag">BOBINAS CA GÊMEAS · RETARDADOR</div>
+  <ul class="specs">
+    <li><span>DISCO</span><em>Cu · Ø640 × 50 mm</em></li>
+    <li><span>NÚCLEO</span><em>C laminado · aço-Si</em></li>
+    <li><span>BOBINAS</span><em>2 × 240 esp. · CA 0–12 A ef.</em></li>
+    <li><span>LEI</span><em>e = −dΦ/dt · Lenz</em></li>
+  </ul>
+</div>
+
+<div id="hint">
+  arraste — orbitar&nbsp;&nbsp;·&nbsp;&nbsp;role — zoom&nbsp;&nbsp;·&nbsp;&nbsp;passe o mouse — inspecionar peças<br>
+  <b>ESPAÇO</b> — freio total
+  <span class="pol pa"></span>polaridade + (N)<span class="pol pc" style="margin-left:12px"></span>polaridade − (S)<br>
+  <span class="pol pe"></span>campo E (violeta)&nbsp;&nbsp;·&nbsp;&nbsp;campo B (linhas âmbar/ciano)
+</div>
+
+<aside id="panel">
+  <div class="p-head" id="pHead">
+    <span class="dot" id="stDot"></span><span class="st" id="stTxt" role="status" aria-live="polite">PRONTO</span>
+    <button id="btnCol" title="Recolher/expandir painel" aria-label="Recolher ou expandir painel" aria-controls="pBody" aria-expanded="true">–</button>
+  </div>
+  <div id="pBody">
+    <section class="sec">
+      <h3>EXCITAÇÃO E ACIONAMENTO</h3>
+      <div class="crow"><label for="inRpm">velocidade alvo</label><output id="oRpm">900 rpm</output></div>
+      <input id="inRpm" type="range" min="0" max="2400" step="20" value="900">
+      <div class="crow"><label for="inExc">corrente nas bobinas · 12 A = nominal</label><output id="oExc">6.6 A ef.</output></div>
+      <input id="inExc" type="range" min="0" max="8" step="0.01" value="0.55">
+      <div class="crow"><label for="inFrq">frequência CA</label><output id="oFrq">1.2 Hz</output></div>
+      <input id="inFrq" type="range" min="0.2" max="8" step="0.1" value="1.2">
+      <div class="crow"><label for="inTrn">espiras por bobina</label><output id="oTrn">240 esp.</output></div>
+      <input id="inTrn" type="range" min="60" max="3000" step="20" value="240">
+      <button id="btnBrake" aria-pressed="false">SEGURAR — FREIO TOTAL</button>
+      <label class="tg" style="margin-top:8px"><span>motor acionando o eixo</span><input id="tMotor" type="checkbox" checked><i></i></label>
+    </section>
+    <section class="sec">
+      <h3>MODO · SENTIDO · MATERIAL</h3>
+      <div class="crow"><label for="selMode">excitação</label><select id="selMode"><option value="ac">CA (alternada)</option><option value="dc">CC (contínua)</option></select></div>
+      <div class="crow"><label for="selMat">material do disco</label><select id="selMat"></select></div>
+      <div id="matInfo" class="mi"></div>
+      <button class="mini" id="btnDir" type="button" style="width:100%;margin-top:8px" aria-pressed="false"></button>
+    </section>
+    <section class="sec">
+      <h3>CENÁRIOS E ROTEIROS</h3>
+      <div class="mrow"><button class="mini" type="button" data-scn="emerg">EMERGÊNCIA</button><button class="mini" type="button" data-scn="heat">SUPERAQUEC.</button><button class="mini" type="button" data-scn="dcac">CC × CA</button></div>
+      <div id="guide" hidden><p id="gTxt" role="status"></p><div class="mrow"><button class="mini" type="button" id="gNext">PRÓXIMO ›</button><button class="mini" type="button" id="gEnd">FECHAR</button></div></div>
+    </section>
+    <section class="sec">
+      <h3>EXPORTAR</h3>
+      <div class="mrow"><button class="mini" type="button" id="btnCsv">CSV</button><button class="mini" type="button" id="btnPng">CAPTURA PNG</button><button class="mini" type="button" id="btnLink">COPIAR LINK</button></div>
+    </section>
+    <section class="sec">
+      <h3>INDICADORES</h3>
+      <div class="irow"><span>velocidade do disco</span><b><em id="rRpm">0000</em><i style="font:inherit;font-size:9px;color:var(--dim);font-style:normal"> rpm</i></b></div>
+      <div class="irow"><span>torque de frenagem</span><b><em id="rTq">0.0</em><i style="font:inherit;font-size:9px;color:var(--dim);font-style:normal"> N·m</i></b></div>
+      <div class="irow"><span>potência de frenagem</span><b><em id="rPw">0.0</em><i style="font:inherit;font-size:9px;color:var(--dim);font-style:normal"> kW</i></b></div>
+      <div class="irow"><span>corrente na bobina</span><b><em id="rI">0.0</em><i style="font:inherit;font-size:9px;color:var(--dim);font-style:normal"> A ef.</i></b></div>
+      <div class="irow"><span>B pico no entreferro (estim.)</span><b><em id="rB">0.00</em><i style="font:inherit;font-size:9px;color:var(--dim);font-style:normal"> T</i></b></div>
+      <div class="irow"><span>temp. do disco</span><b><em id="rTmp">28</em><i id="rTmpU" style="font:inherit;font-size:9px;color:var(--dim);font-style:normal"> °C</i></b></div>
+      <div class="irow"><span>temp. da trilha (sob os polos)</span><b><em id="rTrk">28</em><i style="font:inherit;font-size:9px;color:var(--dim);font-style:normal"> °C</i></b></div>
+      <div id="tbar"></div>
+    </section>
+    <section class="sec">
+      <h3>OSCILOSCÓPIO · JANELA DE 5 s</h3>
+      <canvas id="scope"></canvas>
+      <div class="leg"><span><i class="sa"></i>I(t) — corrente na bobina</span><span><i class="sb"></i>T(t) — <b id="lgT" style="font-weight:400">torque · 2f</b></span></div>
+    </section>
+    <section class="sec">
+      <h3>VISUALIZAÇÃO</h3>
+      <label class="tg"><span>campo magnético B (linhas)</span><input id="tField" type="checkbox" checked><i></i></label>
+      <label class="tg"><span>campo elétrico E (bobinas e disco)</span><input id="tEfld" type="checkbox" checked><i></i></label>
+      <label class="tg"><span>correntes parasitas J (giros)</span><input id="tSwirl" type="checkbox" checked><i></i></label>
+      <label class="tg"><span>mapa de calor (disco)</span><input id="tHeat" type="checkbox" checked><i></i></label>
+      <div class="lg" id="lgH"><i></i><div><span>frio</span><span>quente</span></div></div>
+      <label class="tg"><span>mapa de campo B (|B| no entreferro)</span><input id="tBmap" type="checkbox" checked><i></i></label>
+      <div class="lg" id="lgB"><i></i><div><span>0 T</span><span>0,8 T</span></div></div>
+      <label class="tg"><span>legendas</span><input id="tLabels" type="checkbox" checked><i></i></label>
+      <label class="tg"><span>som (zumbido CA + rotação)</span><input id="tSound" type="checkbox"><i></i></label>
+      <label class="tg"><span>bloom (brilho HDR)</span><input id="tBloom" type="checkbox" checked><i></i></label>
+      <button id="btnShadow" type="button">SOMBRAS</button>
+    </section>
+  </div>
+</aside>
+
+<div id="err"><div>Não foi possível iniciar o WebGL.<br>Tente um navegador moderno em um computador.</div></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
