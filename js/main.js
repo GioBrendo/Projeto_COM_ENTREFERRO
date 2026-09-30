@@ -38,7 +38,7 @@ class RectHelix extends THREE.Curve{
 
 const pickables = [];
 const PARTS = {
-  disc:  ['DISCO CONDUTOR','Cu · Ø640 × 50 mm · correntes de Foucault → calor'],
+  disc:  ['DISCO CONDUTOR','Cu · Ø250 × 5 mm · correntes de Foucault → calor'],
   hub:   ['CUBO E FURAÇÃO','6 × M12 em Ø116 · chavetado ao eixo'],
   shaft: ['EIXO DE ACIONAMENTO','Ø68 aço · 2 mancais de rolamento'],
   coilA: ['BOBINA A (FRONTAL)','240 espiras Cu · 12 A ef. CA · ∥ ao disco'],
@@ -307,7 +307,7 @@ CONFIG.feedBoxX.forEach((x,i) => addFeedBox(x, 'ALIM. ' + 'AB'[i]));
 
 /* ============================================================ annotations */
 const ANNS = [
-  [-2.3,  1.3,  0.28, -1, 'DISCO CONDUTOR',      'Cu · Ø640 × 50 mm'],
+  [-2.3,  1.3,  0.28, -1, 'DISCO CONDUTOR',      'Cu · Ø250 × 5 mm'],
   [ 2.2,  0.75, 1.1,  -1, 'BOBINA A (FRONTAL)',  '240 esp. · Cu · CA · ∥ ao disco'],
   [ 2.2, -0.75,-1.1,   1, 'BOBINA B (TRASEIRA)', 'em série · aditiva'],
   [ 4.15, 0.5,  0.9,   1, 'NÚCLEO EM C',         'aço-Si laminado'],
@@ -485,14 +485,14 @@ function updateDynamics(dt){
     const modeStr = modeBuilt.toUpperCase();
 
     // 1. Atualiza as dicas (tooltips - PARTS) ao passar o mouse
-    PARTS.disc[1]  = `${matBuilt} · Ø640 × 50 mm · correntes de Foucault → calor`;
+    PARTS.disc[1]  = `${matBuilt} · Ø250 × 5 mm · correntes de Foucault → calor`;
     PARTS.coilA[1] = `${turnsBuilt} espiras Cu · 12 A ef. ${modeStr} · ∥ ao disco`;
     PARTS.coilB[1] = `${turnsBuilt} espiras Cu · em série (aditiva) · ∥ ao disco`;
 
     // 2. Atualiza as anotações textuais flutuantes na tela (annEls)
     if (annEls.length > 2) {
       // annEls[0] é a anotação do DISCO CONDUTOR
-      annEls[0].el.querySelector('.s').textContent = `${matBuilt} · Ø640 × 50 mm`;
+      annEls[0].el.querySelector('.s').textContent = `${matBuilt} · Ø250 × 5 mm`;
       // annEls[1] é a anotação da BOBINA A
       annEls[1].el.querySelector('.s').textContent = `${turnsBuilt} esp. · Cu · ${modeStr} · ∥ ao disco`;
     }
