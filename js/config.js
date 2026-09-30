@@ -1,6 +1,6 @@
 // Todos os "números mágicos" do modelo num só lugar.
 export const CONFIG = {
-  disc:{ R:3.2, T:0.5 },
+  disc:{ R:3.2, T:0.05 },
   poleX:2.2,                       // raio do eixo dos polos (mundo, +x)
   overlayOffset:0.004,             // afastamento entre planos E / B (anti z-fighting)
   cables:[
