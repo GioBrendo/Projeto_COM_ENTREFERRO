@@ -467,11 +467,35 @@ function poleUpdate(spr, isN, aI, dt){
   spr.visible = spr.material.opacity > 0.03;
 }
 let turnsBuilt = 240;
+let matBuilt = 'Cu';
+let modeBuilt = 'ac';
+
 function updateDynamics(dt){
   const nR = turnsRatio()*sim.sat;   // N·I efetivo após saturação
-  if (turnsBuilt !== params.turns){                       // reconstrói o enrolamento quando o nº de espiras muda
-    turnsBuilt = params.turns; for (const u of units) u.setTurns(turnsBuilt);
-    PARTS.coilA[1] = `${turnsBuilt} espiras Cu · 12 A ef. CA · ∥ ao disco`; PARTS.coilB[1] = `${turnsBuilt} espiras Cu · em série (aditiva) · ∥ ao disco`;
+  
+  // Verifica se houve mudança nas espiras, material ou modo (CA/CC)
+  if (turnsBuilt !== params.turns || matBuilt !== params.mat || modeBuilt !== params.mode){
+    turnsBuilt = params.turns;
+    matBuilt = params.mat;
+    modeBuilt = params.mode; 
+    
+    // Reconstrói as espiras 3D
+    for (const u of units) u.setTurns(turnsBuilt);
+    
+    const modeStr = modeBuilt.toUpperCase();
+
+    // 1. Atualiza as dicas (tooltips - PARTS) ao passar o mouse
+    PARTS.disc[1]  = `${matBuilt} · Ø640 × 50 mm · correntes de Foucault → calor`;
+    PARTS.coilA[1] = `${turnsBuilt} espiras Cu · 12 A ef. ${modeStr} · ∥ ao disco`;
+    PARTS.coilB[1] = `${turnsBuilt} espiras Cu · em série (aditiva) · ∥ ao disco`;
+
+    // 2. Atualiza as anotações textuais flutuantes na tela (annEls)
+    if (annEls.length > 2) {
+      // annEls[0] é a anotação do DISCO CONDUTOR
+      annEls[0].el.querySelector('.s').textContent = `${matBuilt} · Ø640 × 50 mm`;
+      // annEls[1] é a anotação da BOBINA A
+      annEls[1].el.querySelector('.s').textContent = `${turnsBuilt} esp. · Cu · ${modeStr} · ∥ ao disco`;
+    }
   }
   const aI  = Math.min(1, Math.abs(sim.I)/17), aB = Math.min(1, Math.abs(sim.I)*nR/17);   // aI: corrente; aB: campo (∝ N·I)
   const sgn = sim.I >= 0 ? 1 : -1;
