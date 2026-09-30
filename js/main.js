@@ -10,7 +10,10 @@ const rbox = (w, h, d, r, s = 3) => new RoundedBoxGeometry(w, h, d, s, r);
 // RoundedBoxGeometry é não indexada; mergeGeometries exige todas indexadas ou todas não → uniformiza antes de fundir
 const mergeMixed = gs => { const g = mergeGeometries(gs.map(x => x.index ? x.toNonIndexed() : x)); if (!g) throw new Error('mergeGeometries falhou (atributos incompatíveis)'); return g; };   // arestas com bisel: captam highlights
 
-const { R, T } = CONFIG.disc;
+const { Rv:R, Tv:T, gap:GAP, mm:MM } = CONFIG.disc;
+const DISC_TXT = `Ø${Math.round(CONFIG.disc.R*200)} × ${+(CONFIG.disc.T*100).toFixed(1)} mm`;
+const DY = 0.55 - (T/2 + GAP);   // deslocamento axial: faces polares (0,55 no desenho de referência) descem até T/2 + entreferro
+const mmOf = u => Math.round(u*MM), BOLT = [3,4,5,6,8,10,12,16].find(b => b >= 0.18*MM);   // cotas das peças mecânicas em mm reais
 const C_AMBER = new THREE.Color(0xffb454), C_CYAN = new THREE.Color(0x63c7d6);
 
 /* ============================================================ geometry helpers */
@@ -38,12 +41,12 @@ class RectHelix extends THREE.Curve{
 
 const pickables = [];
 const PARTS = {
-  disc:  ['DISCO CONDUTOR','Cu · Ø250 × 5 mm · correntes de Foucault → calor'],
-  hub:   ['CUBO E FURAÇÃO','6 × M12 em Ø116 · chavetado ao eixo'],
-  shaft: ['EIXO DE ACIONAMENTO','Ø68 aço · 2 mancais de rolamento'],
+  disc:  ['DISCO CONDUTOR',`Cu · ${DISC_TXT} · correntes de Foucault → calor`],
+  hub:   ['CUBO E FURAÇÃO',`6 × M${BOLT} em Ø${mmOf(1.16)} · chavetado ao eixo`],
+  shaft: ['EIXO DE ACIONAMENTO',`Ø${mmOf(0.68)} aço · 2 mancais de rolamento`],
   coilA: ['BOBINA A (FRONTAL)','240 espiras Cu · 12 A ef. CA · ∥ ao disco'],
   coilB: ['BOBINA B (TRASEIRA)','240 espiras Cu · em série (aditiva) · ∥ ao disco'],
-  coreA: ['NÚCLEO EM C LAMINADO','aço-Si · par de polos · entreferros de 3 mm'],
+  coreA: ['NÚCLEO EM C LAMINADO',`aço-Si · par de polos · entreferros de ${(GAP*MM).toFixed(0)} mm`],
   ped:   ['MANCAL DE APOIO','rolamento · graxa vedada'],
   base:  ['BASE DE FIXAÇÃO','estrutura de aço soldada'],
   feed:  ['CAIXA DE ALIMENTAÇÃO CA','2 fios blindados · alimentação das bobinas'],
@@ -194,10 +197,10 @@ function buildUnit(){
   const g = u.group;
 
   /* núcleo em C laminado: braços à frente/atrás do disco + coluna externa; pernas com sapatas polares */
-  const cg = [...lamBox(2.65,0.4,1.0, 0.825, 1.75), ...lamBox(2.65,0.4,1.0, 0.825,-1.75), ...lamBox(0.4,3.9,1.0, 1.95, 0)];
+  const cg = [...lamBox(2.65,0.4,1.0, 0.825, 1.75-DY), ...lamBox(2.65,0.4,1.0, 0.825,-(1.75-DY)), ...lamBox(0.4,3.9-2*DY,1.0, 1.95, 0)];
   for (const s of [1,-1]){
-    const p = new THREE.CylinderGeometry(0.42,0.42,0.84,32); p.translate(0, s*1.13, 0); cg.push(p);
-    const h = new THREE.CylinderGeometry(0.62,0.62,0.16,40); h.translate(0, s*0.63, 0); cg.push(h);
+    const p = new THREE.CylinderGeometry(0.42,0.42,0.84,32); p.translate(0, s*(1.13-DY), 0); cg.push(p);
+    const h = new THREE.CylinderGeometry(0.62,0.62,0.16,40); h.translate(0, s*(0.63-DY), 0); cg.push(h);
   }
   const core = tag(new THREE.Mesh(mergeMixed(cg), matCore.clone()), 'coreA');
   core.castShadow = core.receiveShadow = true; g.add(core);
@@ -207,13 +210,13 @@ function buildUnit(){
   // cada anel representa N/M espiras; grade radial (L) × axial (K) dentro da janela de enrolamento; 240 esp. → 3×6 (projeto)
   const mk = (s, ex, n = 240)=>{ const M = Math.max(4, Math.round(18*n/240)), L = Math.max(1, Math.round(Math.sqrt(M*0.4))), K = Math.max(2, Math.round(M/L));
     const pr = L > 1 ? 0.17/(L-1) : 0, pz = 0.575/(K-1), rw = Math.min(0.038, 0.45*Math.min(pr || 1, pz)), gs = [];
-    for (let r=0;r<L;r++) for (let k=0;k<K;k++) gs.push(ringGeo(0.52 + (L > 1 ? pr*r : 0.085), rw + ex, s*(0.83 + pz*k), 8, 48));
+    for (let r=0;r<L;r++) for (let k=0;k<K;k++) gs.push(ringGeo(0.52 + (L > 1 ? pr*r : 0.085), rw + ex, s*(0.83 - DY + pz*k), 8, 48));
     return mergeGeometries(gs); };
   const coilA = tag(new THREE.Mesh(mk( 1,0), u.coilMat), 'coilA');
   const coilB = tag(new THREE.Mesh(mk(-1,0), u.coilMat), 'coilB');
   coilA.castShadow = coilB.castShadow = true; g.add(coilA, coilB);
   const fl = [];
-  for (const s of [1,-1]) for (const y of [0.775,1.475]){ const f = new THREE.CylinderGeometry(0.8,0.8,0.05,40); f.translate(0, s*y, 0); fl.push(f); }
+  for (const s of [1,-1]) for (const y of [0.775-DY,1.475-DY]){ const f = new THREE.CylinderGeometry(0.8,0.8,0.05,40); f.translate(0, s*y, 0); fl.push(f); }
   g.add(new THREE.Mesh(mergeGeometries(fl), matPhen));
 
   /* campo E nas bobinas: ao longo do fio, no sentido da corrente */
@@ -227,7 +230,7 @@ function buildUnit(){
 
   /* campo E induzido no disco: anéis em torno do eixo de B (faces e plano médio), E = −∂A/∂t */
   const eg = [];
-  for (const y of [0.27, 0, -0.27]) for (const rr of [0.28, 0.5, 0.72]) eg.push(ringGeo(rr, 0.022, y, 6, 72));
+  for (const y of [T/2+0.02, 0, -T/2-0.02]) for (const rr of [0.28, 0.5, 0.72]) eg.push(ringGeo(rr, 0.022, y, 6, 72));
   u.eTex = stripeBase.clone(); u.eTex.repeat.set(3,1);
   u.eMat = new THREE.MeshBasicMaterial({ color:0xc79bff, transparent:true, opacity:0,
     blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false, alphaMap:u.eTex });
@@ -240,7 +243,7 @@ function buildUnit(){
   const tanV = new THREE.Vector3(-Math.sin(ARC), Math.cos(ARC), 0).normalize();
   const YUP = new THREE.Vector3(0,1,0);
   for (const face of [1,-1]) for (const dir of [1,-1]){
-    const w = new THREE.Group(); w.rotation.x = -Math.PI/2; w.position.set(0, face*0.3, dir*0.36);
+    const w = new THREE.Group(); w.rotation.x = -Math.PI/2; w.position.set(0, face*(T/2+0.04), dir*0.36);
     const arc = new THREE.Group();
     const tor = new THREE.Mesh(new THREE.TorusGeometry(0.30, 0.030, 8, 64, ARC), u.swirlMat);
     const cone = new THREE.Mesh(coneGeo, u.swirlMat);
@@ -251,10 +254,11 @@ function buildUnit(){
   }
 
   /* campo B: 9 circuitos fechados (atravessam bobinas, entreferros e disco; vazam além do núcleo) */
+  const yy = y => Math.sign(y)*(Math.abs(y) >= 0.55 ? Math.abs(y) - DY : Math.abs(y)*(0.55 - DY)/0.55);   // linhas de campo acompanham o novo entreferro
   const fg = [];
   for (const zk of [-0.3, 0, 0.3]) for (const xo of [-0.26, 0, 0.26]){
     const pts = [[xo,1.2],[xo,0.55],[xo*1.5,0],[xo,-0.55],[xo,-1.2],[0.5*xo+0.2,-1.62],[0.9,-1.75],[1.75,-1.75],
-      [1.97,-1.4],[1.97,0],[1.97,1.4],[1.75,1.75],[0.9,1.75],[0.5*xo+0.2,1.62]].map(a=>new THREE.Vector3(a[0], a[1], zk));
+      [1.97,-1.4],[1.97,0],[1.97,1.4],[1.75,1.75],[0.9,1.75],[0.5*xo+0.2,1.62]].map(a=>new THREE.Vector3(a[0], yy(a[1]), zk));
     fg.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.65), 220, 0.024, 5, true));
   }
   u.fieldTex = stripeBase.clone(); u.fieldTex.repeat.set(3,1);
@@ -266,8 +270,8 @@ function buildUnit(){
   /* selos N / S nas faces polares (F = traseira, B = frontal) */
   const mkSprite = ()=>{ const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:texN, transparent:true, opacity:0 }));
     s.scale.setScalar(0.52); s.userData = { pop:0, L:'N' }; s.renderOrder = 5; return s; };
-  u.sprF = mkSprite(); u.sprF.position.set(-0.95, -0.63, 0); g.add(u.sprF);
-  u.sprB = mkSprite(); u.sprB.position.set(-0.95,  0.63, 0); g.add(u.sprB);
+  u.sprF = mkSprite(); u.sprF.position.set(-0.95, -(0.63-DY), 0); g.add(u.sprF);
+  u.sprB = mkSprite(); u.sprB.position.set(-0.95,  0.63-DY, 0); g.add(u.sprB);
   return u;
 }
 const unitA = buildUnit();
@@ -277,7 +281,7 @@ const uB = { value:0 };
 const bMat = new THREE.ShaderMaterial({ uniforms:{ uB }, transparent:true, depthWrite:false, side:THREE.DoubleSide,
   vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
   fragmentShader: JET + 'uniform float uB; varying vec2 vUv; void main(){ float r=length((vUv-.5)*2.6); float v=uB/(1.+pow(r/.68,6.)); gl_FragColor=vec4(pal(v),smoothstep(.02,.1,v)*.8); }' });
-const bMaps = [0.34,-0.34].map(z=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6), bMat);
+const bMaps = [T/2+0.3*GAP, -T/2-0.3*GAP].map(z=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6), bMat);
   m.position.set(XP,0,z); m.renderOrder = 3; scene.add(m); return m; });
 
 /* ---- AC feed cables + junction boxes ---- */
@@ -307,13 +311,13 @@ CONFIG.feedBoxX.forEach((x,i) => addFeedBox(x, 'ALIM. ' + 'AB'[i]));
 
 /* ============================================================ annotations */
 const ANNS = [
-  [-2.3,  1.3,  0.28, -1, 'DISCO CONDUTOR',      'Cu · Ø250 × 5 mm'],
-  [ 2.2,  0.75, 1.1,  -1, 'BOBINA A (FRONTAL)',  '240 esp. · Cu · CA · ∥ ao disco'],
-  [ 2.2, -0.75,-1.1,   1, 'BOBINA B (TRASEIRA)', 'em série · aditiva'],
+  [-2.3,  1.3,  T/2, -1, 'DISCO CONDUTOR', `Cu · ${DISC_TXT}`],
+  [ 2.2,  0.75, 1.12-DY, -1, 'BOBINA A (FRONTAL)',  '240 esp. · Cu · CA · ∥ ao disco'],
+  [ 2.2, -0.75, -(1.12-DY), 1, 'BOBINA B (TRASEIRA)', 'em série · aditiva'],
   [ 4.15, 0.5,  0.9,   1, 'NÚCLEO EM C',         'aço-Si laminado'],
-  [ 2.2, -0.72, 0.27, -1, 'CAMPO E NO DISCO',    'circula em torno de B · Faraday'],
+  [ 2.2, -0.72, T/2+0.02, -1, 'CAMPO E NO DISCO',    'circula em torno de B · Faraday'],
   [ 2.6,  0.0,  0.0,  -1, 'CAMPO B ⟂ AO DISCO',  'atravessa bobinas, entreferros e disco'],
-  [ 0.15, 0.35, 4.25,  1, 'EIXO DE ACIONAMENTO', 'Ø68 · mancais de apoio'],
+  [ 0.15, 0.35, 4.25,  1, 'EIXO DE ACIONAMENTO', `Ø${mmOf(0.68)} · mancais de apoio`],
   [ 2.6, -4.40, 3.30,  1, 'ALIMENTAÇÃO CA',      '2 fios blindados'],
 ];
 const annEls = [];
@@ -485,14 +489,14 @@ function updateDynamics(dt){
     const modeStr = modeBuilt.toUpperCase();
 
     // 1. Atualiza as dicas (tooltips - PARTS) ao passar o mouse
-    PARTS.disc[1]  = `${matBuilt} · Ø250 × 5 mm · correntes de Foucault → calor`;
+    PARTS.disc[1]  = `${matBuilt} · ${DISC_TXT} · correntes de Foucault → calor`;
     PARTS.coilA[1] = `${turnsBuilt} espiras Cu · 12 A ef. ${modeStr} · ∥ ao disco`;
     PARTS.coilB[1] = `${turnsBuilt} espiras Cu · em série (aditiva) · ∥ ao disco`;
 
     // 2. Atualiza as anotações textuais flutuantes na tela (annEls)
     if (annEls.length > 2) {
       // annEls[0] é a anotação do DISCO CONDUTOR
-      annEls[0].el.querySelector('.s').textContent = `${matBuilt} · Ø250 × 5 mm`;
+      annEls[0].el.querySelector('.s').textContent = `${matBuilt} · ${DISC_TXT}`;
       // annEls[1] é a anotação da BOBINA A
       annEls[1].el.querySelector('.s').textContent = `${turnsBuilt} esp. · Cu · ${modeStr} · ∥ ao disco`;
     }

@@ -1,6 +1,9 @@
 // Todos os "números mágicos" do modelo num só lugar.
+// ÚNICA fonte das dimensões do disco (1 = 100 mm): Ø250 × 5 mm. Toda a geometria 3D é derivada daqui.
+const DISC = { R:1.25, T:0.05 }, VIEW_R = 3.2;   // VIEW_R: raio do disco na cena (polos, núcleo, bobinas e mapa de calor foram desenhados p/ esse raio)
+const S = VIEW_R/DISC.R;                          // unidades de cena por unidade do disco
 export const CONFIG = {
-  disc:{ R:1.25, T:0.05 },
+  disc:{ ...DISC, Rv:VIEW_R, Tv:DISC.T*S, gap:0.6*DISC.T*S, mm:DISC.R*100/VIEW_R },   // Rv/Tv: raio/espessura na cena; gap: entreferro por lado (0,6·T = 3 mm p/ 5 mm); mm: mm por unidade de cena
   poleX:2.2,                       // raio do eixo dos polos (mundo, +x)
   overlayOffset:0.004,             // afastamento entre planos E / B (anti z-fighting)
   cables:[
