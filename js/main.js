@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from './config.js';
-import { sim, params, view, step, turnsRatio } from './physics.js';
+import { sim, params, view, step, turnsRatio, bInst, peakB, bOf, bRmsNow } from './physics.js';
 import { renderer, scene, camera, controls, camFrom, camTo, fx, isSmall, render, resizeGL, setShadowQuality } from './scene.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { initFeatures, record, updateAudio, updateCamera, INFERNO_GLSL } from './features.js';
@@ -249,7 +249,7 @@ function buildUnit(){
     const cone = new THREE.Mesh(coneGeo, u.swirlMat);
     cone.position.set(0.30*Math.cos(ARC), 0.30*Math.sin(ARC), 0);
     cone.quaternion.setFromUnitVectors(YUP, tanV);
-    arc.add(tor, cone); arc.userData.dir = dir*face; arc.renderOrder = 3;
+    arc.add(tor, cone); arc.userData.dir = dir; arc.scale.y = dir;   // mesma circulação nas duas faces (J atravessa a espessura); a seta acompanha o giro arc.renderOrder = 3;
     w.add(arc); g.add(w); u.swirls.push(arc);
   }
 
@@ -422,7 +422,7 @@ function sizeScope(){
   sctx.setTransform(d,0,0,d,0,0);
 }
 sizeScope();
-const scopeBuf = []; let tbScale = 20;
+const scopeBuf = []; let tbScale = 20*CONFIG.phys.scale;
 
 /* ============================================================ hover / tooltip */
 const tip = $('tip'), tipN = tip.querySelector('.t-n'), tipS = tip.querySelector('.t-s');
@@ -503,7 +503,7 @@ function updateDynamics(dt){
   }
   const aI  = Math.min(1, Math.abs(sim.I)/17), aB = Math.min(1, Math.abs(sim.I)*nR/17);   // aI: corrente; aB: campo (∝ N·I)
   const sgn = sim.I >= 0 ? 1 : -1;
-  const eN  = Math.min(1, Math.abs(sim.omega)*sim.uEff*sim.uEff*nR*nR/70);
+  const eN  = Math.min(1, Math.abs(sim.omega)*sim.uEff*sim.uEff*nR*nR/25);   // /25: normalização visual (Ir² nominal ≈ 0,36 com o núcleo saturando)
   sim.eN = eN;
   const dI = (sim.uEff > 0 && params.mode === 'ac') ? Math.cos(sim.theta) : 0;
   for (const u of units){
@@ -529,7 +529,7 @@ function updateDynamics(dt){
     poleUpdate(u.sprB, sim.I*u.sign <  0, aB, dt);
   }
   for (const m of feedLeds) m.emissiveIntensity = 0.15 + 2.6*Math.min(1, sim.uEff);
-  uB.value = Math.min(1, 0.01078*Math.abs(sim.I)*turnsRatio()*sim.sat/0.8);
+  uB.value = Math.min(1, Math.abs(bOf(sim.I))/0.5);   // fim da escala do mapa: 0,5 T
   uBase.value = 0.4*Math.max(0, Math.min(1, (sim.temp-28)/272));
   uHeat.phi.value = sim.phi % (2*Math.PI); uHeat.om.value = sim.omega; uHeat.eN.value = sim.eN; uHeat.temp.value = sim.temp; uHeat.trk.value = Math.max(0, sim.tTrack - sim.temp);
   const heat = Math.max(0, Math.min(1, (sim.temp-60)/280))*(fx.bloom ? CONFIG.bloom.discGain : 1);
@@ -559,7 +559,7 @@ function drawScope(){
   const iS = Math.max(18, sim.Irms*1.6);
   trace(p => SH/2 - (Math.max(-iS,Math.min(iS,p.i))/iS)*(SH/2-4), 'rgba(255,180,84,0.92)', 1.4);
   let tbMax = 0; for (const p of scopeBuf) if (p.tb > tbMax) tbMax = p.tb;
-  tbScale += (Math.max(5, tbMax*1.1) - tbScale)*0.08;       // autoescala suavizada
+  tbScale += (Math.max(5*CONFIG.phys.scale, tbMax*1.1) - tbScale)*0.08;       // autoescala suavizada
   trace(p => SH-3 - Math.min(1, p.tb/tbScale)*(SH-10), 'rgba(154,162,171,0.85)', 1.2);
 }
 
@@ -568,19 +568,18 @@ const setT = (el, v)=>{ if (el._t !== v){ el._t = v; el.textContent = v; } };   
 const setC = (el, v)=>{ if (el._c !== v){ el._c = v; el.className = v; } };
 function updateHUD(){
   setT(rRpm, (sim.omega < -0.2 ? '−' : '') + String(Math.round(Math.abs(sim.omega)*9.5493)).padStart(4,'0'));
-  setT(rTq, Math.abs(sim.Tb).toFixed(1));
-  setT(rPw, (sim.P/1000).toFixed(1));
+  setT(rTq, Math.abs(sim.Tb).toFixed(2));
+  setT(rPw, Math.round(sim.P).toString());
   setT(rI, sim.Irms.toFixed(1)); setC(rI, sim.Irms > 12.5 ? 'hot' : '');
-  { const Bp = CONFIG.phys.bPerA*sim.Irms*turnsRatio()*sim.sat; setT(rB, Bp.toFixed(2)); setC(rB, sim.sat < 0.76 ? 'hot' : ''); }   // B_lin > Bsat: núcleo saturando
+  { setT(rB, peakB().toFixed(2)); setC(rB, sim.sat < 0.76 ? 'hot' : ''); }   // B_lin > Bsat: núcleo saturando
   setT(rTmp, String(Math.round(sim.temp)));
   setC(rTmp, sim.temp > 180 ? 'hot' : '');
   setT(rTrk, String(Math.round(sim.tTrack))); setC(rTrk, sim.tTrack > 250 ? 'hot' : '');
   const n = Math.round(Math.max(0, Math.min(1, (sim.tTrack-28)/312))*16);
   segs.forEach((el,i)=> setC(el, 'seg' + (i<n ? ' lit' : '') + (i<n && i>=12 ? ' r' : '')));
   let st = 'PRONTO', cls = '';
-  if (sim.trip){ st = 'SUPERAQUECIDO · RESFRIANDO'; cls = 'err'; }
-  else if (sim.Irms > 0.3 && Math.abs(sim.omega) < 2){ st = 'EIXO PARADO'; cls = 'on'; }
-  else if (sim.Irms > 0.3 && Math.abs(sim.Tb) > 3){ st = 'FRENANDO'; cls = 'on'; }
+  if (sim.Irms > 0.3 && Math.abs(sim.omega) < 2){ st = 'EIXO PARADO'; cls = 'on'; }
+  else if (sim.Irms > 0.3 && Math.abs(sim.Tb) > 3*CONFIG.phys.scale){ st = 'FRENANDO'; cls = 'on'; }
   else if (Math.abs(sim.omega) > 2){ st = 'EM ROTAÇÃO'; cls = 'run'; }
   setT(stTxt, st); setC(stDot, 'dot ' + cls);
 }
@@ -633,7 +632,7 @@ function frame(){
     step(CONFIG.sim.dt); acc -= CONFIG.sim.dt; n++;
     if (scopeBuf.length && scopeBuf[scopeBuf.length-1].t > sim.t) scopeBuf.length = 0;   // reset → limpa o traço
     record();
-    const r = sim.Irms > 0.01 ? sim.I/sim.Irms : 0;          // torque instantâneo ∝ I²: média = Tb, pico = 2·Tb
+    const bq = bRmsNow(), r = bq > 1e-6 ? bOf(sim.I)/bq : 0;   // torque instantâneo ∝ B(t)²: média = Tb (pico < 2·Tb quando o núcleo satura)
     scopeBuf.push({ t:sim.t, i:sim.I, tb:Math.abs(sim.Tb)*r*r });
   }
   if (n === CONFIG.sim.maxSteps) acc = 0;

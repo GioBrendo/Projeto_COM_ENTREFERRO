@@ -31,7 +31,7 @@ function setMode(m){ params.mode = m === 'dc' ? 'dc' : 'ac'; selMode.value = par
 function setDir(d){ params.dir = +d < 0 ? -1 : 1; btnDir.textContent = params.dir < 0 ? 'SENTIDO DO EIXO: ↺ REVERSO' : 'SENTIDO DO EIXO: ↻ NORMAL'; btnDir.setAttribute('aria-pressed', params.dir < 0); }
 function setMat(k){ if (!MATS[k]) k = 'Cu'; params.mat = k; selMat.value = k; const m = MATS[k], mp = matProps(k);
   matCopper.color.setHex(m.color); matCopper.metalness = m.metal; matCopper.roughness = Math.min(1, m.rough*1.5);   // compensa o mapa de rugosidade (média ≈ 0,7)
-  $('matInfo').textContent = `σ ${(m.sigma/1e6).toFixed(1)} MS/m · ρ ${m.rho} kg/m³ · c ${m.c} J/kg·K · ω crítica ${Math.round(mp.slip0*30/Math.PI)} rpm`; }
+  $('matInfo').textContent = `σ ${(m.sigma/1e6).toFixed(1)} MS/m · ρ ${m.rho} kg/m³ · c ${m.c} J/kg·K · ω crítica ${Math.round(mp.slip0*30/Math.PI)} rpm${k === 'Fe' ? ' · aprox.: μr≈1, ignora ferromagnetismo' : ''}`; }
 selMode.onchange = () => setMode(selMode.value);
 selMat.onchange  = () => setMat(selMat.value);
 btnDir.onclick   = () => setDir(-params.dir);
@@ -40,9 +40,9 @@ selMat.innerHTML = Object.entries(MATS).map(([k,m]) => `<option value="${k}">${m
 /* ---------- cenários e roteiros ---------- */
 const S = {
   emerg:[{ set:{ n:240, rpm:900, exc:1, f:1.2, mode:'ac', dir:1, mat:'Cu', motor:false, w0:900 },
-    text:'Frenagem de emergência: motor desligado, disco a 900 rpm, 12 A nominais. Sem contato, o disco desacelera e o calor sobe. Segure Espaço para excitação total.' }],
+    text:'Frenagem de emergência: motor desligado, disco a 900 rpm, 12 A nominais. Sem contato, o disco para em ~1–2 s; a energia cinética (~80 J) vira calor e aquece o disco só ~0,1 °C. Segure Espaço para excitação total.' }],
   heat:[{ set:{ n:240, rpm:1300, exc:1.5, f:1.2, mode:'ac', dir:1, mat:'Cu', motor:true, w0:1300 },
-    text:'Sobreaquecimento: motor mantendo 1300 rpm com 18 A. O disco aquece até o disparo térmico (300 °C); a proteção corta a corrente e religa a 210 °C.' }],
+    text:'Regime contínuo: motor mantendo 1300 rpm com 18 A. Em alta velocidade o torque cai como 1/ω e a potência dissipada satura (~140 W): o disco aquece devagar (constante de tempo de minutos) e a perda Joule das bobinas (I²R) é comparável ao calor do disco.' }],
   dcac:[
     { set:{ n:240, rpm:900, exc:1, f:2, mode:'ac', dir:1, mat:'Cu', motor:true, w0:900 }, text:'1/4 · CA a 2 Hz: o torque pulsa a 2f (traço cinza) e a média vale Tb.' },
     { set:{ mode:'dc' }, text:'2/4 · CC: mesmo valor eficaz, torque constante, sem ondulação.' },
@@ -81,14 +81,14 @@ export function record(){                      // chamado a cada passo fixo (120
   if (sim.t < lastT) log.length = 0;           // reset da simulação = nova corrida
   lastT = sim.t;
   if (++k % 2) return;
-  log.push([sim.t, sim.I, sim.omega, sim.Tb, sim.P, sim.temp, sim.tTrack]);
+  log.push([sim.t, sim.I, sim.omega, sim.Tb, sim.P, sim.temp, sim.tTrack, sim.tCoil, sim.V, sim.Pel]);
   if (log.length > 40000) log.splice(0, 5000);
 }
 const stamp = () => new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
 const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
 const tag = () => `${params.mode}_${params.mat}_${params.rpm}rpm_${stamp()}`;
 $('btnCsv').onclick = () => {
-  const rows = ['t_s,I_A,omega_rad_s,Tb_N_m,P_W,T_disco_C,T_trilha_C', ...log.map(r => r.map((v,i) => v.toFixed(i === 0 ? 3 : 4)).join(','))];
+  const rows = ['t_s,I_A,omega_rad_s,Tb_N_m,P_W,T_disco_C,T_trilha_C,T_bobina_C,V_ef_V,P_ativa_W', ...log.map(r => r.map((v,i) => v.toFixed(i === 0 ? 3 : 4)).join(','))];
   save(new Blob([rows.join('\n')], { type:'text/csv' }), `foucault_${tag()}.csv`);
 };
 $('btnPng').onclick = () => {
@@ -111,12 +111,12 @@ export function updateCamera(dt){ if (!tw) return; tw.t += dt; const k = Math.mi
 controls.addEventListener('start', () => { tw = null; });   // arrastar cancela a animação
 
 /* ---------- áudio: zumbido 100/200/300 Hz (∝ excitação em CA) + ruído de rotação (∝ ω) ---------- */
-let ac = null, humG, windG, windF;
+let ac = null, humG, windG, windF; const humOsc = [];
 function startAudio(){
   ac = new (window.AudioContext || window.webkitAudioContext)();
   const master = ac.createGain(); master.gain.value = 0.35; master.connect(ac.destination);
   humG = ac.createGain(); humG.gain.value = 0; humG.connect(master);
-  for (const [fq, g] of [[100,1],[200,.5],[300,.25]]){ const o = ac.createOscillator(), gg = ac.createGain(); o.frequency.value = fq; gg.gain.value = g; o.connect(gg).connect(humG); o.start(); }
+  for (const [fq, g] of [[100,1],[200,.5],[300,.25]]){ const o = ac.createOscillator(), gg = ac.createGain(); o.frequency.value = fq; humOsc.push([o, fq/100]); gg.gain.value = g; o.connect(gg).connect(humG); o.start(); }
   const buf = ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate), ch = buf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = Math.random()*2 - 1;
   const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
   windF = ac.createBiquadFilter(); windF.type = 'bandpass'; windF.Q.value = .8; windG = ac.createGain(); windG.gain.value = 0;
@@ -124,7 +124,8 @@ function startAudio(){
 }
 export function updateAudio(){
   if (!ac || ac.state !== 'running') return; const t = ac.currentTime, w = Math.min(1, Math.abs(sim.omega)/250);
-  humG.gain.setTargetAtTime((params.mode === 'ac' ? 0.4 : 0.03)*Math.min(1, sim.Ir/3), t, .08);
+  for (const [o, h] of humOsc) o.frequency.setTargetAtTime(Math.max(25, 2*params.freq*h), t, .1);   // zumbido = 2f (piso de 25 Hz para ficar audível)
+  humG.gain.setTargetAtTime((params.mode === 'ac' ? 0.4 : 0.03)*Math.min(1, sim.Ir/0.6), t, .08);
   windG.gain.setTargetAtTime(w*w*.5, t, .1); windF.frequency.setTargetAtTime(150 + 1800*w, t, .1);
 }
 $('tSound').onchange = e => { if (e.target.checked){ if (!ac) startAudio(); ac.resume(); } else if (ac) ac.suspend(); };
